@@ -5,7 +5,10 @@ import cv2
 import numpy as np
 import shutil
 import SimpleITK as sitk 
-
+import nrrd
+import pandas as pd
+from radiomics import featureextractor
+import warnings
 
 class Paciente:
 
@@ -18,6 +21,7 @@ class Paciente:
         self.UI_Contornos = self.obtenerUI_Contornos()
         self.ROI_con_mayor_suvmax = ROI_con_mayor_suvmax
         self.dicom_roi_map = self.obtener_mapa_dicom_ROI()
+        self.df_Paciente = self.extract_Pyradiomics_data()
 
 
     def importarDatos(self):
@@ -360,10 +364,47 @@ class Paciente:
 
         sitk.WriteImage(mask_image, os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "mask.nrrd"))
 
+        # Lee el archivo NRRD de la imagen para aplicarlo a la mascara
+        file_path_image = os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "image.nrrd")
+        data_Image, header_Image = nrrd.read(file_path_image)
+        # Lee el archivo NRRD y obtén los datos y el encabezado
+        file_path = os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "mask.nrrd")
+        data_Mask, header_Mask = nrrd.read(file_path)
 
-o = Paciente(29, "3")
+        # Modifica los valores del encabezado según tus necesidades
+        header_Mask['type'] = header_Image['type']
+        header_Mask['space directions'] = header_Image['space directions']
+        header_Mask['space origin'] = header_Image['space origin']
 
-o.ct_to_NRRD()
-o.mascara_to_NRRD()
+        # Guarda los datos modificados y el encabezado en un nuevo archivo NRRD
+        new_file_path = os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "mask.nrrd")
+        nrrd.write(new_file_path, data_Mask, header_Mask)
 
-print(o.dicom_roi_map)
+
+    def extract_Pyradiomics_data (self):
+        self._ct_to_NRRD()
+        self._mascara_to_NRRD()
+
+        warnings.filterwarnings('ignore')
+        data = pd.DataFrame()
+        imagePath = os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "image.nrrd")
+        maskPath = os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "mask.nrrd")
+
+        # Instantiate the default extractor
+        extractor = featureextractor.RadiomicsFeatureExtractor()
+
+        result_pyradiomics = extractor.execute(imagePath, maskPath)
+
+        data['Paciente'] = [self.paciente]
+        data = data.set_index('Paciente')
+        data['ROI con mayor SUVmax'] = [self.ROI_con_mayor_suvmax]
+        for i, (key, value) in enumerate(result_pyradiomics.items()):
+            if i > 10 :
+                data[key] = [value]
+        return data
+
+
+# Demostracion de funcionamiento
+
+Paciente = Paciente(29, "3")
+print(Paciente.df_Paciente)
