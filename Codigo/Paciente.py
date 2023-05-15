@@ -4,6 +4,7 @@ import re
 import cv2
 import numpy as np
 import shutil
+import SimpleITK as sitk 
 
 
 class Paciente:
@@ -101,7 +102,7 @@ class Paciente:
         x_imagen = coordenadas[0]
         y_imagen = coordenadas[1]
         # Definir las coordenadas de los contornos
-        r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom, self.UI_Contornos)
+        r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom)
         posicion = None;
         for i, roi in enumerate(r):
             if (ROI == roi):
@@ -319,6 +320,50 @@ class Paciente:
         return drm
 
 
+    def _ct_to_NRRD (self):
+        dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
+        # Crear la carpeta para los archivos DICOM
+        if not os.path.exists(os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}")):
+            os.makedirs(os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "CT"))
+            os.makedirs(os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD"))
+            
+        for f in os.listdir(dir_CT):
+            numeroDcm = f.split("_")[1].split(".")[0]
+
+            if (numeroDcm in self.dicom_roi_map[self.ROI_con_mayor_suvmax]):
+                filename = f"DICOM_{numeroDcm}.dcm"
+                source_path = os.path.join(dir_CT, filename)
+                dest_path = os.path.join(os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "CT"), filename)
+                shutil.copyfile(source_path, dest_path)
+
+        reader = sitk.ImageSeriesReader()
+        dicomReader = reader.GetGDCMSeriesFileNames(os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "CT"))
+        reader.SetFileNames(dicomReader)
+        dicoms = reader.Execute()
+        sitk.WriteImage(dicoms, os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "image.nrrd"))
+
+
+    def _mascara_to_NRRD (self):
+        dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
+        mascaras_ROI_mayorSUVMAX = [] 
+
+        for f in os.listdir(dir_CT):
+            numeroDcm = f.split("_")[1].split(".")[0]
+            if numeroDcm in self.dicom_roi_map[self.ROI_con_mayor_suvmax]:
+                mascaras_ROI_mayorSUVMAX.append(self.obtenerMascaraROIEspecifica(int(self.ROI_con_mayor_suvmax), numeroDcm))
+
+        mascaras_ROI_mayorSUVMAX = np.array([mascaras_ROI_mayorSUVMAX])
+        mascaras_ROI_mayorSUVMAX = mascaras_ROI_mayorSUVMAX.reshape((3, 512, 512))
+
+        mascaras_ROI_mayorSUVMAX = mascaras_ROI_mayorSUVMAX.astype(int)
+        mask_image = sitk.GetImageFromArray(mascaras_ROI_mayorSUVMAX)
+
+        sitk.WriteImage(mask_image, os.path.join(self.direccionBaseDatos, str(self.paciente), f"CT_ROI_{self.ROI_con_mayor_suvmax}", "NRRD", "mask.nrrd"))
+
+
 o = Paciente(29, "3")
+
+o.ct_to_NRRD()
+o.mascara_to_NRRD()
 
 print(o.dicom_roi_map)
