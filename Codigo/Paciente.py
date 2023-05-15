@@ -8,13 +8,15 @@ import shutil
 
 class Paciente:
 
-    def __init__(self, paciente):
+    def __init__(self, paciente, ROI_con_mayor_suvmax):
         self.paciente = paciente
         self.direccionBaseDatos = os.path.join(os.getcwd(), "PacienteEjemplo")
         self.files, self.damagedFiles, self.RTSTRUCT = self.importarDatos()
         self.rois = self.obtener_ROI_RTSTRUCT()
         self.nombres_ROI = self.obtenerNombresROI()
         self.UI_Contornos = self.obtenerUI_Contornos()
+        self.ROI_con_mayor_suvmax = ROI_con_mayor_suvmax
+        self.dicom_roi_map = self.obtener_mapa_dicom_ROI()
 
 
     def importarDatos(self):
@@ -280,7 +282,6 @@ class Paciente:
         for clave_externa in UI_Contornos:
             with open(os.path.join(self.direccionBaseDatos, str(self.paciente), "ROI_txt", f"fROI_{clave_externa}.txt"), "r") as archivo:
                 lineas = archivo.readlines()
-
             for i, cont in enumerate(UI_Contornos[clave_externa], 0):
                 if (len(cont) == 1):
                     try:
@@ -289,25 +290,35 @@ class Paciente:
                         numeros = re.findall(r'\d{1,3}(?:\.\d{1,3})?', lineas[i])
                     except IndexError:
                         pass
-
-                    
                     numeros = np.array(numeros)
                     numeros = np.negative(numeros.astype(np.float64))
                     n_pad = 3 - len(numeros) % 3
                     if n_pad < 3:
                         numeros = np.pad(numeros, (0, n_pad), mode='constant', constant_values=0)
-                        
                     numeros = numeros.reshape(-1, 3)
-
                     UI_Contornos[clave_externa][i] = numeros
-
         # Borro los archivos de texto sobrantes
         shutil.rmtree(os.path.join(self.direccionBaseDatos, str(self.paciente), "ROI_txt"))
-
         return UI_Contornos
 
 
+    def obtener_mapa_dicom_ROI(self):
+        # mapa de arcivos dicom por cada roi
+        drm = {}
+        dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
+        for r in self.nombres_ROI:
+            drm[str(r)] = []
+        for f in os.listdir(dir_CT):
+            numeroMascara = f.split("_")[1].split(".")[0]
+            # Obtener archivos de cada ROI
+            rois_por_archivo = self.obtener_ROIs_y_posicion_del_Dicom(numeroMascara)[0]
+            if (len(rois_por_archivo) > 0):
+                for r in rois_por_archivo:
+                    if (numeroMascara not in drm[str(r)]):
+                        drm[str(r)].append(numeroMascara)
+        return drm
 
-o = Paciente(29)
 
-print(o.UI_Contornos)
+o = Paciente(29, "3")
+
+print(o.dicom_roi_map)
