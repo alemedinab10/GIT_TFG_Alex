@@ -4,11 +4,12 @@ import re
 import cv2
 import numpy as np
 import shutil
-import SimpleITK as sitk 
+import SimpleITK as sitk
 import nrrd
 import pandas as pd
-from radiomics import featureextractor
-import warnings
+#from radiomics import featureextractor
+import time
+from tqdm import tqdm
 
 class Paciente:
 
@@ -21,7 +22,8 @@ class Paciente:
         self.UI_Contornos = self.obtenerUI_Contornos()
         self.ROI_con_mayor_suvmax = ROI_con_mayor_suvmax
         self.dicom_roi_map = self.obtener_mapa_dicom_ROI()
-        self.df_Paciente = self.extract_Pyradiomics_data()
+        #self.df_Paciente = self.extract_Pyradiomics_data()
+        self.mascaraGeneral = self.obtenerMascarasPaciente()
 
 
     def importarDatos(self):
@@ -100,6 +102,43 @@ class Paciente:
         return r, pos
 
 
+    def obtenerMascaraLabel1(self, numero_dicom):
+        dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
+        coordenadas = self.obtener_Coordenadas(dicom)
+        x_imagen = coordenadas[0]
+        y_imagen = coordenadas[1]
+        # Definir las coordenadas de los contornos
+        r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom)
+        mRois = {}
+        for i in range(len(r)):
+            mRois[i] = np.zeros((512, 512), dtype=np.int32)
+        contornos = []
+
+        for i in range(len(r)):
+            contornos.append(self.UI_Contornos[r[i]][pos[i]][:, :-1])
+
+        scaled_contornos = [[] for _ in range(len(contornos))]
+        for i, contorno in enumerate(contornos):
+            for x, y in contorno:
+                x = (x - x_imagen)
+                y = (y - y_imagen)
+                scaled_contornos[i].append((x, y))
+
+        for i in range(len(r)):
+            # Dibujar el contorno en la matriz de ceros
+            cv2.drawContours(mRois[i], [np.array(scaled_contornos[i], dtype=np.int32)], 0, 1, -1)
+
+        mascara = np.zeros((512,512), dtype=object)  # crear matriz mascara con ceros
+
+        for k in range(len(mRois)):  # recorrer todas las matrices mRois[i]s
+            for i in range(512):  # recorrer filas
+                for j in range(512):  # recorrer columnas
+                    if (mRois[k][i][j] != 0):
+                        mascara[i][j] = 1
+
+        return mascara
+
+
     def obtenerMascaraROIEspecifica(self, ROI, numero_dicom):
         dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
         coordenadas = self.obtener_Coordenadas(dicom)
@@ -127,14 +166,52 @@ class Paciente:
         return mRois
 
 
-    def obtener_ROI_RTSTRUCT (self):
+    def obtenerMascarasPaciente(self):
+        mascaras = []
+        total = len(self.obtener_mapa_dicom_Paciente())
+        progress_bar = tqdm(total=total, desc='Construyendo Mascaras')
+
+        for p in self.obtener_mapa_dicom_Paciente():
+            mascaras.append(self.obtenerMascaraLabel1(p))
+            progress_bar.update(1)
+            time.sleep(0.001)  # Simulación de un tiempo de procesamiento
+
+        progress_bar.close()
+        return mascaras
+
+
+    def pasarMascaraNRRD (self):
+        self.mascaraGeneral = np.array(self.mascaraGeneral)
+        self.mascaraGeneral = self.mascaraGeneral.flatten()
+        self.mascaraGeneral = self.mascaraGeneral.astype(int)
+        num_slices = len(self.obtener_mapa_dicom_Paciente())
+        num_cols = self.mascaraGeneral.size // (num_slices * 512)
+        self.mascaraGeneral = self.mascaraGeneral.reshape((num_slices, 512, num_cols))
+
+        mask_image = sitk.GetImageFromArray(self.mascaraGeneral)
+        sitk.WriteImage(mask_image, os.path.join(self.direccionBaseDatos, str(self.paciente), "mask.nrrd"))
+
+
+    def mascaraToString(self, mascara):
+        output = ""
+        for i in range(len(mascara)):
+            for j in range(len(mascara[0])):
+                if (mascara[i][j] == 0):
+                    output += ". "
+                else:
+                    output += str(mascara[i][j]) + " "
+            output += "\n"
+        return output
+
+
+    def obtener_ROI_RTSTRUCT(self):
         r = []
         for roi in self.RTSTRUCT.ROIContourSequence:
             r.append(roi)
         return r
 
 
-    def obtenerNombresROI (self):
+    def obtenerNombresROI(self):
         nR = []
         for roi in self.rois:
             ROI_name = int(self.extraerROIName(roi))
@@ -324,6 +401,19 @@ class Paciente:
         return drm
 
 
+    def obtener_mapa_dicom_Paciente(self):
+        # mapa de arcivos dicom por cada roi
+        drm = {}
+        dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
+        for f in os.listdir(dir_CT):
+            numeroMascara = f.split("_")[1].split(".")[0]
+            ds = pydicom.dcmread(os.path.join(dir_CT, f))
+            drm[str(numeroMascara)] = self.obtener_Coordenadas(ds)[2]
+
+        drm = dict(sorted(drm.items(), key=lambda x: x[1], reverse=True))
+        return drm
+
+
     def _ct_to_NRRD (self):
         dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
         # Crear la carpeta para los archivos DICOM
@@ -381,7 +471,7 @@ class Paciente:
         nrrd.write(new_file_path, data_Mask, header_Mask)
 
 
-    def extract_Pyradiomics_data (self):
+    """ def extract_Pyradiomics_data (self):
         self._ct_to_NRRD()
         self._mascara_to_NRRD()
 
@@ -401,10 +491,11 @@ class Paciente:
         for i, (key, value) in enumerate(result_pyradiomics.items()):
             if i > 10 :
                 data[key] = [value]
-        return data
+        return data """
 
 
 # Demostracion de funcionamiento
 
-Paciente = Paciente(29, "3")
-print(Paciente.df_Paciente)
+paciente29 = Paciente(29, "3")
+
+paciente29.pasarMascaraNRRD()
