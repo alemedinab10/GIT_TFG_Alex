@@ -180,7 +180,7 @@ class Paciente:
         return mascaras
 
 
-    def pasarMascaraNRRD (self):
+    def guardarMascaraNRRD (self):
         self.mascaraGeneral = np.array(self.mascaraGeneral)
         self.mascaraGeneral = self.mascaraGeneral.flatten()
         self.mascaraGeneral = self.mascaraGeneral.astype(int)
@@ -498,4 +498,4 @@ class Paciente:
 
 paciente29 = Paciente(29, "3")
 
-paciente29.pasarMascaraNRRD()
+paciente29.guardarMascaraNRRD()
