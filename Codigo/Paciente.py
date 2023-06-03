@@ -11,6 +11,7 @@ import pandas as pd
 import time
 from tqdm import tqdm
 
+
 class Paciente:
 
     def __init__(self, paciente, ROI_con_mayor_suvmax):
@@ -494,8 +495,4 @@ class Paciente:
         return data """
 
 
-# Demostracion de funcionamiento
-
-paciente29 = Paciente(29, "3")
-
-paciente29.guardarMascaraNRRD()
+p29 = Paciente (29, 3)
