@@ -16,7 +16,7 @@ class Paciente:
 
     def __init__(self, paciente, ROI_con_mayor_suvmax):
         self.paciente = paciente
-        self.direccionBaseDatos = os.path.join(os.getcwd(), "PacienteEjemplo")
+        self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
         self.files, self.damagedFiles, self.RTSTRUCT = self.importarDatos()
         self.rois = self.obtener_ROI_RTSTRUCT()
         self.nombres_ROI = self.obtenerNombresROI()
@@ -493,6 +493,3 @@ class Paciente:
             if i > 10 :
                 data[key] = [value]
         return data """
-
-
-p29 = Paciente (29, 3)
