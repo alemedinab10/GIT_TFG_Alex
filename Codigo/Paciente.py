@@ -90,7 +90,7 @@ class Paciente:
         # Buscar el patrón deseado usando expresiones regulares
         patron = re.compile(r'\(0018, 1130\) Table Height\s+DS:\s+(.*)\n')
         resultados = patron.findall(str(ds))
-        return resultados
+        return float(resultados[0].replace("'", ""))
 
 
     def extraerPesoCT(self):
@@ -99,7 +99,7 @@ class Paciente:
         # Buscar el patrón deseado usando expresiones regulares
         patron = re.compile(r'\(0010, 1030\) Patient\'s Weight\s+DS:\s+(.*)\n')
         resultados = patron.findall(str(ds))
-        return resultados
+        return float(resultados[0].replace("'", ""))
 
 
     def obtener_Coordenadas(self, ct):
@@ -201,7 +201,7 @@ class Paciente:
         return mascaras
 
 
-    def guardarMascaraNRRD (self):
+    """ def guardarMascaraNRRD (self):
         self.mascaraGeneral = np.array(self.mascaraGeneral)
         self.mascaraGeneral = self.mascaraGeneral.flatten()
         self.mascaraGeneral = self.mascaraGeneral.astype(int)
@@ -210,7 +210,7 @@ class Paciente:
         self.mascaraGeneral = self.mascaraGeneral.reshape((num_slices, 512, num_cols))
 
         mask_image = sitk.GetImageFromArray(self.mascaraGeneral)
-        sitk.WriteImage(mask_image, os.path.join(self.direccionBaseDatos, str(self.paciente), "mask.nrrd"))
+        sitk.WriteImage(mask_image, os.path.join(self.direccionBaseDatos, str(self.paciente), "mask.nrrd")) """
 
 
     def mascaraToString(self, mascara):
