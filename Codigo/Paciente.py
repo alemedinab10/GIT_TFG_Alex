@@ -17,6 +17,8 @@ class Paciente:
     def __init__(self, paciente, ROI_con_mayor_suvmax):
         self.paciente = paciente
         self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
+        self.altura = self.extraerAlturaCT()
+        self.peso = self.extraerPesoCT()
         self.files, self.damagedFiles, self.RTSTRUCT = self.importarDatos()
         self.rois = self.obtener_ROI_RTSTRUCT()
         self.nombres_ROI = self.obtenerNombresROI()
@@ -78,6 +80,24 @@ class Paciente:
     def extraerUI(self, ds):
         # Buscar el patrón deseado usando expresiones regulares
         patron = re.compile(r'\(0008, 1155\) Referenced SOP Instance UID\s+UI:\s+(.*)\n')
+        resultados = patron.findall(str(ds))
+        return resultados
+
+
+    def extraerAlturaCT(self):
+        dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
+        ds = pydicom.dcmread(os.path.join(dir_CT, os.listdir(dir_CT)[0]))
+        # Buscar el patrón deseado usando expresiones regulares
+        patron = re.compile(r'\(0018, 1130\) Table Height\s+DS:\s+(.*)\n')
+        resultados = patron.findall(str(ds))
+        return resultados
+
+
+    def extraerPesoCT(self):
+        dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
+        ds = pydicom.dcmread(os.path.join(dir_CT, os.listdir(dir_CT)[0]))
+        # Buscar el patrón deseado usando expresiones regulares
+        patron = re.compile(r'\(0010, 1030\) Patient\'s Weight\s+DS:\s+(.*)\n')
         resultados = patron.findall(str(ds))
         return resultados
 
