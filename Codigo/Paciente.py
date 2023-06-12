@@ -19,6 +19,7 @@ class Paciente:
         self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
         self.altura = self.extraerAlturaCT()
         self.peso = self.extraerPesoCT()
+        self.spacing = self.extraerSpacing()
         self.files, self.damagedFiles, self.RTSTRUCT = self.importarDatos()
         self.rois = self.obtener_ROI_RTSTRUCT()
         self.nombres_ROI = self.obtenerNombresROI()
@@ -92,7 +93,6 @@ class Paciente:
         resultados = patron.findall(str(ds))
         return float(resultados[0].replace("'", ""))
 
-
     def extraerPesoCT(self):
         dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
         ds = pydicom.dcmread(os.path.join(dir_CT, os.listdir(dir_CT)[0]))
@@ -100,6 +100,18 @@ class Paciente:
         patron = re.compile(r'\(0010, 1030\) Patient\'s Weight\s+DS:\s+(.*)\n')
         resultados = patron.findall(str(ds))
         return float(resultados[0].replace("'", ""))
+    
+    def extraerSpacing(self):
+        dir_PET = os.path.join(self.direccionBaseDatos, str(self.paciente), r"PET\\")
+        ds = pydicom.dcmread(os.path.join(dir_PET, os.listdir(dir_PET)[0]))
+        # Buscar el patrón deseado usando expresiones regulares
+        patron = re.compile(r'\(0028, 0030\) Pixel Spacing\s+DS:\s+(.*)\n')
+        patronZ = re.compile(r'\(0018, 0050\) Slice Thickness\s+DS:\s+(.*)\n')
+        coordenadaXY = patron.findall(str(ds))[0].replace("'", "")
+        coordenadaZ = patronZ.findall(str(ds))[0].replace("'", "")
+        resultado = eval(coordenadaXY)
+        resultado.append(float(coordenadaZ))
+        return resultado
 
 
     def obtener_Coordenadas(self, ct):
@@ -198,6 +210,10 @@ class Paciente:
             time.sleep(0.001)  # Simulación de un tiempo de procesamiento
 
         progress_bar.close()
+
+        for i in range (len(mascaras)):
+            mascaras[i] = mascaras[i].astype(int)
+            
         return mascaras
 
 
