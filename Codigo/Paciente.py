@@ -27,7 +27,7 @@ class Paciente:
         self.ROI_con_mayor_suvmax = ROI_con_mayor_suvmax
         self.dicom_roi_map = self.obtener_mapa_dicom_ROI()
         #self.df_Paciente = self.extract_Pyradiomics_data()
-        self.mascaraGeneral = self.obtenerMascarasPaciente()
+        #self.mascaraGeneral = self.obtenerMascarasPaciente()
 
 
     def importarDatos(self):
@@ -137,7 +137,7 @@ class Paciente:
         return r, pos
 
 
-    def obtenerMascara(self, numero_dicom, label=None):
+    def obtenerMascara(self, numero_dicom, label=None, ROI=None):
         dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente), "CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
         coordenadas = self.obtener_Coordenadas(dicom)
         x_imagen = coordenadas[0]
@@ -162,7 +162,7 @@ class Paciente:
         for i in range(len(r)):
             # Dibujar el contorno en la matriz de ceros
             cv2.drawContours(mRois[i], [np.array(scaled_contornos[i], dtype=np.int32)], 0, r[i], -1)
-        mascara = np.zeros((512, 512), dtype=list)  # crear matriz mascara con ceros
+        mascara = np.zeros((512, 512), dtype=object)  # crear matriz mascara con ceros
         for k in range(len(mRois)):  # recorrer todas las matrices mRois[i]s
                 for i in range(512):  # recorrer filas
                     for j in range(512):  # recorrer columnas
@@ -175,45 +175,56 @@ class Paciente:
                             else:
                                 mascara[i][j].append(mRois[k][i][j])
         if label is None:
-            return mascara
+            if ROI is None:
+                # Sin label ni ROI
+                return mascara
+            else:
+                # Sin label con ROI
+                mascaraResultado = np.zeros((512, 512), dtype=int)
+                for i in range(512):
+                    for j in range(512):
+                        try :
+                            len(mascara[i][j])
+                            existeElemento = False
+                            for elemento in mascara[i][j]:
+                                if (elemento == ROI):
+                                    existeElemento = True
+                            if existeElemento:
+                                mascaraResultado[i][j] = ROI
+                        except :
+                            if (mascara[i][j] == ROI):
+                                mascaraResultado[i][j] = ROI
+                return mascaraResultado
         else:
-            mascaraResultado = np.zeros((512, 512), dtype=int)
-            for i in range(512):
-                for j in range(512):
-                    try :
-                        len(mascara[i][j])
-                        mascaraResultado[i][j] = label
-                    except :
-                        if (mascara[i][j] != 0):
+            if ROI is None:
+                # Con label sin ROI
+                mascaraResultado = np.zeros((512, 512), dtype=int)
+                for i in range(512):
+                    for j in range(512):
+                        try :
+                            len(mascara[i][j])
                             mascaraResultado[i][j] = label
-            return mascaraResultado
-
-
-    def obtenerMascaraROIEspecifica(self, ROI, numero_dicom):
-        dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
-        coordenadas = self.obtener_Coordenadas(dicom)
-        x_imagen = coordenadas[0]
-        y_imagen = coordenadas[1]
-        # Definir las coordenadas de los contornos
-        r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom)
-        posicion = None;
-        for i, roi in enumerate(r):
-            if (ROI == roi):
-                posicion = i
-        if (posicion == None):
-            print (f"ERROR: obtenerMascaraROIEspecifica(ROI=>{ROI}) El ROI especificado no se encuentra en el DICOM")
-            return
-        mRois = np.zeros((512, 512), dtype=np.int32)
-        contornos = []
-        contornos.append(self.UI_Contornos[ROI][pos[posicion]][:, :-1])
-        scaled_contornos = []
-        for contorno in contornos:
-            for x, y in contorno:
-                x = (x - x_imagen)
-                y = (y - y_imagen)
-                scaled_contornos.append((x, y))
-        cv2.drawContours(mRois, [np.array(scaled_contornos, dtype=np.int32)], 0, 1, -1)
-        return mRois
+                        except :
+                            if (mascara[i][j] != 0):
+                                mascaraResultado[i][j] = label
+                return mascaraResultado
+            else:
+                # Con label con ROI
+                mascaraResultado = np.zeros((512, 512), dtype=int)
+                for i in range(512):
+                    for j in range(512):
+                        try :
+                            len(mascara[i][j])
+                            existeElemento = False
+                            for elemento in mascara[i][j]:
+                                if (elemento == ROI):
+                                    existeElemento = True
+                            if existeElemento:
+                                mascaraResultado[i][j] = label
+                        except :
+                            if (mascara[i][j] == ROI):
+                                mascaraResultado[i][j] = label
+                return mascaraResultado
 
 
     def obtenerMascarasPaciente(self):
@@ -244,6 +255,33 @@ class Paciente:
                     output += str(mascara[i][j]) + " "
             output += "\n"
         return output
+
+
+    def _obtenerMascaraROIEspecificaOptimizadoNRRD(self, ROI, numero_dicom):
+        dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
+        coordenadas = self.obtener_Coordenadas(dicom)
+        x_imagen = coordenadas[0]
+        y_imagen = coordenadas[1]
+        # Definir las coordenadas de los contornos
+        r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom)
+        posicion = None;
+        for i, roi in enumerate(r):
+            if (ROI == roi):
+                posicion = i
+        if (posicion == None):
+            print (f"ERROR: _obtenerMascaraROIEspecificaOptimizadoNRRD(ROI=>{ROI}) El ROI especificado no se encuentra en el DICOM")
+            return
+        mRois = np.zeros((512, 512), dtype=np.int32)
+        contornos = []
+        contornos.append(self.UI_Contornos[ROI][pos[posicion]][:, :-1])
+        scaled_contornos = []
+        for contorno in contornos:
+            for x, y in contorno:
+                x = (x - x_imagen)
+                y = (y - y_imagen)
+                scaled_contornos.append((x, y))
+        cv2.drawContours(mRois, [np.array(scaled_contornos, dtype=np.int32)], 0, 1, -1)
+        return mRois
 
 
     def _obtenerMascaraOptimizadoParaConstructor(self, numero_dicom):
@@ -523,7 +561,7 @@ class Paciente:
         for f in os.listdir(dir_CT):
             numeroDcm = f.split("_")[1].split(".")[0]
             if numeroDcm in self.dicom_roi_map[self.ROI_con_mayor_suvmax]:
-                mascaras_ROI_mayorSUVMAX.append(self.obtenerMascaraROIEspecifica(int(self.ROI_con_mayor_suvmax), numeroDcm))
+                mascaras_ROI_mayorSUVMAX.append(self._obtenerMascaraROIEspecificaOptimizadoNRRD(int(self.ROI_con_mayor_suvmax), numeroDcm))
 
         mascaras_ROI_mayorSUVMAX = np.array([mascaras_ROI_mayorSUVMAX])
         mascaras_ROI_mayorSUVMAX = mascaras_ROI_mayorSUVMAX.reshape((3, 512, 512))
