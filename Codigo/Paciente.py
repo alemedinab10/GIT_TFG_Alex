@@ -26,8 +26,8 @@ class Paciente:
         self.UI_Contornos = self.obtenerUI_Contornos()
         self.ROI_con_mayor_suvmax = ROI_con_mayor_suvmax
         self.dicom_roi_map = self.obtener_mapa_dicom_ROI()
+        self.mascaraGeneral = self.obtenerMascarasPaciente()
         #self.df_Paciente = self.extract_Pyradiomics_data()
-        #self.mascaraGeneral = self.obtenerMascarasPaciente()
 
 
     def importarDatos(self):
