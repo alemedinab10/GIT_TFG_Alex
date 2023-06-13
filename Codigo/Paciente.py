@@ -7,9 +7,10 @@ import shutil
 import SimpleITK as sitk
 import nrrd
 import pandas as pd
-#from radiomics import featureextractor
 import time
 from tqdm import tqdm
+from scipy.ndimage import label, center_of_mass, sum
+#from radiomics import featureextractor
 
 
 class Paciente:
@@ -19,6 +20,7 @@ class Paciente:
         self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
         self.altura = self.extraerAlturaCT()
         self.peso = self.extraerPesoCT()
+        self.BSA = np.sqrt((self.altura*self.peso )/3600)
         self.spacing = self.extraerSpacing()
         self.files, self.damagedFiles, self.RTSTRUCT = self.importarDatos()
         self.rois = self.obtener_ROI_RTSTRUCT()
@@ -27,7 +29,13 @@ class Paciente:
         self.ROI_con_mayor_suvmax = ROI_con_mayor_suvmax
         self.dicom_roi_map = self.obtener_mapa_dicom_ROI()
         self.mascaraGeneral = self.obtenerMascarasPaciente()
+        self.labeled_data, self.num_features = label(self.mascaraGeneral)
+        self.euc_dist_ctr, self.man_dist_ctr, self.che_dist_ctr, self.index_i_ctr = self.distances(self.calcularCentroides(), self.spacing)
+        self.distancias_ctr = np.array([self.euc_dist_ctr, self.man_dist_ctr, self.che_dist_ctr, self.index_i_ctr])
         #self.df_Paciente = self.extract_Pyradiomics_data()
+
+
+#%% Mascara y datos del paciente 
 
 
     def importarDatos(self):
@@ -644,3 +652,91 @@ class Paciente:
             if i > 10 :
                 data[key] = [value]
         return data """
+
+
+#%% Distancias
+
+
+    def _weighted_distance(self, p1, p2, weights, type_of_distance):
+        try: 
+            len(weights) == len(p1) == len(p2)
+        except: 
+            print('Error: Dimension mismatch between data points and weight array') 
+        else: 
+            # For every type of distance there is a formula for a weighted distance
+            # which will be executed if the corresponding type is selected. 
+            
+            q = p1 - p2 
+            
+            if type_of_distance == 'euclidian':
+                # Weighted Euclidian distance
+                return np.sqrt(((weights * q)**2).sum())
+            
+            elif type_of_distance == 'manhattan' or type_of_distance == 'cityblock':
+                # Weighted Manhattan or Cityblock distance 
+                return (weights * abs(q)).sum()
+                
+            elif type_of_distance == 'chebyshev':
+                # Weighted Chebyshev distance 
+                return max(weights * abs(q))
+                
+            else: 
+                # If a different string than the possible distance types is given, 
+                # the following statement is printed. 
+                print("Error: The selected distance type is not available. \
+                        Try 'euclidian', 'manhattan' or 'cityblock', or 'chebyshev'.")
+
+
+    def distances(self, segmentation, weights):
+        euc_dist = [self._weighted_distance(segmentation[i], segmentation[j], weights, 'euclidian')
+                    for i in range(len(segmentation)) for j in range(len(segmentation)) if i != j]
+        man_dist = [self._weighted_distance(segmentation[i], segmentation[j], weights, 'manhattan')
+                    for i in range(len(segmentation)) for j in range(len(segmentation)) if i != j]
+        che_dist = [self._weighted_distance(segmentation[i], segmentation[j], weights, 'chebyshev')
+                    for i in range(len(segmentation)) for j in range(len(segmentation)) if i != j]
+        index_i = [i for i in range(len(segmentation)) for j in range(len(segmentation)) if i != j]
+        return euc_dist, man_dist, che_dist, index_i
+
+
+    # Function that gives back all the euclidian distances between one specific 
+    # lesion and all the others 
+    def lesion_distances(self, index): 
+        # Give back the array of euclidian distances between one specific lesion and the others
+        d = self.distancias_ctr[0, np.where(self.distancias_ctr[3] == index)[0]]
+        return d
+
+
+    def calcularCentroides (self):
+        centroides = np.asarray(center_of_mass(np.array(self.mascaraGeneral), labels = self.labeled_data,
+                                    index = list(range(1, self.num_features+1))))
+        return centroides
+
+
+    def calcularParametrosDistancia (self): 
+        Dmax_patient = max(self.euc_dist_ctr)
+        sizes_of_lesions = [sum(self.mascaraGeneral, self.labeled_data, index = i) for i in range(1, self.num_features+1)]
+        largest_size = max(sizes_of_lesions)
+        largest_index = np.where(sizes_of_lesions == largest_size)[0][0]
+        largest_label = largest_index + 1
+        Dmax_bulk = max(self.lesion_distances(largest_index))
+        Spread_bulk = np.sum(self.lesion_distances(largest_index))
+        sums = [np.sum(self.lesion_distances(i)) for i in range(self.num_features)]
+        Spread_patient = max(sums)
+        SDmax_euc = Dmax_patient/self.BSA
+        SDmax_man = max(self.man_dist_ctr)/self.BSA
+        SDmax_che = max(self.che_dist_ctr)/self.BSA
+
+        results_dict = {
+            'Height': [self.altura],
+            'Weight': [self.peso],
+            'BSA': [self.BSA],
+            'Dmax_patient': [Dmax_patient],         # Dmax_patient: (Euclidian) Distance between the two lesions that are the farthest away from each other. 
+            'Dmax_bulk': [Dmax_bulk],               # Dmax_bulk: (Euclidian) Distance between the largest lesion and the one the farthest away from it.
+            'Spread_bulk': [Spread_bulk],           # SPREAD_bulk: Sum of the euclidian distances between the largest lesion and all the other lesions.
+            'Spread_patient': [Spread_patient],     # SPREAD_patient: Over all lesions, the maximum of the sum of distances from one lesion to all the others.
+            'SDmax_euc': [SDmax_euc],               # SDmax_euc: Dmax_patient, normalized by BSA
+            'SDmax_man': [SDmax_man],               # SDmax_man: Maximum Manhattan distance between lesions, normalized by BSA. 
+            'SDmax_che': [SDmax_che]                # SDmax_che: Maximum Chebyshev distance between lesions, normalized by BSA. 
+        }
+
+        return pd.DataFrame(results_dict)
