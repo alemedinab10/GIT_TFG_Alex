@@ -174,27 +174,45 @@ class Paciente:
                                 mascara[i][j].append(mRois[k][i][j])
                             else:
                                 mascara[i][j].append(mRois[k][i][j])
+
         if label is None:
             if ROI is None:
                 # Sin label ni ROI
                 return mascara
             else:
                 # Sin label con ROI
-                mascaraResultado = np.zeros((512, 512), dtype=int)
-                for i in range(512):
-                    for j in range(512):
-                        try :
-                            len(mascara[i][j])
-                            existeElemento = False
-                            for elemento in mascara[i][j]:
-                                if (elemento == ROI):
-                                    existeElemento = True
-                            if existeElemento:
-                                mascaraResultado[i][j] = ROI
-                        except :
-                            if (mascara[i][j] == ROI):
-                                mascaraResultado[i][j] = ROI
-                return mascaraResultado
+                if not (isinstance(ROI, list)):
+                    mascaraResultado = np.zeros((512, 512), dtype=int)
+                    for i in range(512):
+                        for j in range(512):
+                            try :
+                                len(mascara[i][j])
+                                existeElemento = False
+                                for elemento in mascara[i][j]:
+                                    if (elemento == ROI):
+                                        existeElemento = True
+                                if existeElemento:
+                                    mascaraResultado[i][j] = ROI
+                            except :
+                                if (mascara[i][j] == ROI):
+                                    mascaraResultado[i][j] = ROI
+                    return mascaraResultado
+                else:
+                    mascaraResultado = np.zeros((512, 512), dtype=int)
+                    for i in range(512):
+                        for j in range(512):
+                            try :
+                                len(mascara[i][j])
+                                existeElemento = []
+                                for elemento in ROI:
+                                    if (elemento in mascara[i][j]):
+                                        existeElemento.append(elemento)
+                                if len(existeElemento) > 0:
+                                    mascaraResultado[i][j] = existeElemento
+                            except :
+                                if (mascara[i][j] in ROI):
+                                    mascaraResultado[i][j] = mascara[i][j]
+                    return mascaraResultado
         else:
             if ROI is None:
                 # Con label sin ROI
@@ -210,21 +228,38 @@ class Paciente:
                 return mascaraResultado
             else:
                 # Con label con ROI
-                mascaraResultado = np.zeros((512, 512), dtype=int)
-                for i in range(512):
-                    for j in range(512):
-                        try :
-                            len(mascara[i][j])
-                            existeElemento = False
-                            for elemento in mascara[i][j]:
-                                if (elemento == ROI):
-                                    existeElemento = True
-                            if existeElemento:
-                                mascaraResultado[i][j] = label
-                        except :
-                            if (mascara[i][j] == ROI):
-                                mascaraResultado[i][j] = label
-                return mascaraResultado
+                if not (isinstance(ROI, list)):
+                    mascaraResultado = np.zeros((512, 512), dtype=int)
+                    for i in range(512):
+                        for j in range(512):
+                            try :
+                                len(mascara[i][j])
+                                existeElemento = False
+                                for elemento in mascara[i][j]:
+                                    if (elemento in ROI):
+                                        existeElemento = True
+                                if existeElemento:
+                                    mascaraResultado[i][j] = label
+                            except :
+                                if (mascara[i][j] in ROI):
+                                    mascaraResultado[i][j] = label
+                    return mascaraResultado
+                else:
+                    mascaraResultado = np.zeros((512, 512), dtype=int)
+                    for i in range(512):
+                        for j in range(512):
+                            try :
+                                len(mascara[i][j])
+                                existeElemento = False
+                                for elemento in mascara[i][j]:
+                                    if (elemento == ROI):
+                                        existeElemento = True
+                                if existeElemento:
+                                    mascaraResultado[i][j] = label
+                            except :
+                                if (mascara[i][j] in ROI):
+                                    mascaraResultado[i][j] = label
+                    return mascaraResultado
 
 
     def obtenerMascarasPaciente(self):
