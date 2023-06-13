@@ -93,6 +93,7 @@ class Paciente:
         resultados = patron.findall(str(ds))
         return float(resultados[0].replace("'", ""))
 
+
     def extraerPesoCT(self):
         dir_CT = os.path.join(self.direccionBaseDatos, str(self.paciente), r"CT\\")
         ds = pydicom.dcmread(os.path.join(dir_CT, os.listdir(dir_CT)[0]))
@@ -100,7 +101,8 @@ class Paciente:
         patron = re.compile(r'\(0010, 1030\) Patient\'s Weight\s+DS:\s+(.*)\n')
         resultados = patron.findall(str(ds))
         return float(resultados[0].replace("'", ""))
-    
+
+
     def extraerSpacing(self):
         dir_PET = os.path.join(self.direccionBaseDatos, str(self.paciente), r"PET\\")
         ds = pydicom.dcmread(os.path.join(dir_PET, os.listdir(dir_PET)[0]))
@@ -135,41 +137,56 @@ class Paciente:
         return r, pos
 
 
-    def obtenerMascaraLabel1(self, numero_dicom):
-        dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
+    def obtenerMascara(self, numero_dicom, label=None):
+        dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente), "CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
         coordenadas = self.obtener_Coordenadas(dicom)
         x_imagen = coordenadas[0]
         y_imagen = coordenadas[1]
         # Definir las coordenadas de los contornos
         r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom)
+        
+        # Se calcula la mascara completa
+
         mRois = {}
         for i in range(len(r)):
             mRois[i] = np.zeros((512, 512), dtype=np.int32)
         contornos = []
-
         for i in range(len(r)):
             contornos.append(self.UI_Contornos[r[i]][pos[i]][:, :-1])
-
         scaled_contornos = [[] for _ in range(len(contornos))]
         for i, contorno in enumerate(contornos):
             for x, y in contorno:
                 x = (x - x_imagen)
                 y = (y - y_imagen)
                 scaled_contornos[i].append((x, y))
-
         for i in range(len(r)):
             # Dibujar el contorno en la matriz de ceros
-            cv2.drawContours(mRois[i], [np.array(scaled_contornos[i], dtype=np.int32)], 0, 1, -1)
-
-        mascara = np.zeros((512,512), dtype=object)  # crear matriz mascara con ceros
-
+            cv2.drawContours(mRois[i], [np.array(scaled_contornos[i], dtype=np.int32)], 0, r[i], -1)
+        mascara = np.zeros((512, 512), dtype=list)  # crear matriz mascara con ceros
         for k in range(len(mRois)):  # recorrer todas las matrices mRois[i]s
-            for i in range(512):  # recorrer filas
-                for j in range(512):  # recorrer columnas
-                    if (mRois[k][i][j] != 0):
-                        mascara[i][j] = 1
-
-        return mascara
+                for i in range(512):  # recorrer filas
+                    for j in range(512):  # recorrer columnas
+                        if (mRois[k][i][j] != 0):
+                            if (mascara[i][j] == 0):
+                                mascara[i][j] = mRois[k][i][j]
+                            elif (mascara[i][j] != 0):
+                                mascara[i][j] = [mascara[i][j]]
+                                mascara[i][j].append(mRois[k][i][j])
+                            else:
+                                mascara[i][j].append(mRois[k][i][j])
+        if label is None:
+            return mascara
+        else:
+            mascaraResultado = np.zeros((512, 512), dtype=int)
+            for i in range(512):
+                for j in range(512):
+                    try :
+                        len(mascara[i][j])
+                        mascaraResultado[i][j] = label
+                    except :
+                        if (mascara[i][j] != 0):
+                            mascaraResultado[i][j] = label
+            return mascaraResultado
 
 
     def obtenerMascaraROIEspecifica(self, ROI, numero_dicom):
@@ -205,7 +222,7 @@ class Paciente:
         progress_bar = tqdm(total=total, desc='Construyendo Mascaras')
 
         for p in self.obtener_mapa_dicom_Paciente():
-            mascaras.append(self.obtenerMascaraLabel1(p))
+            mascaras.append(self._obtenerMascaraOptimizadoParaConstructor(p))
             progress_bar.update(1)
             time.sleep(0.001)  # Simulación de un tiempo de procesamiento
 
@@ -215,18 +232,6 @@ class Paciente:
             mascaras[i] = mascaras[i].astype(int)
             
         return mascaras
-
-
-    """ def guardarMascaraNRRD (self):
-        self.mascaraGeneral = np.array(self.mascaraGeneral)
-        self.mascaraGeneral = self.mascaraGeneral.flatten()
-        self.mascaraGeneral = self.mascaraGeneral.astype(int)
-        num_slices = len(self.obtener_mapa_dicom_Paciente())
-        num_cols = self.mascaraGeneral.size // (num_slices * 512)
-        self.mascaraGeneral = self.mascaraGeneral.reshape((num_slices, 512, num_cols))
-
-        mask_image = sitk.GetImageFromArray(self.mascaraGeneral)
-        sitk.WriteImage(mask_image, os.path.join(self.direccionBaseDatos, str(self.paciente), "mask.nrrd")) """
 
 
     def mascaraToString(self, mascara):
@@ -239,6 +244,43 @@ class Paciente:
                     output += str(mascara[i][j]) + " "
             output += "\n"
         return output
+
+
+    def _obtenerMascaraOptimizadoParaConstructor(self, numero_dicom):
+        dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_dicom).zfill(3)}.dcm"))
+        coordenadas = self.obtener_Coordenadas(dicom)
+        x_imagen = coordenadas[0]
+        y_imagen = coordenadas[1]
+        # Definir las coordenadas de los contornos
+        r, pos = self.obtener_ROIs_y_posicion_del_Dicom(numero_dicom)
+        mRois = {}
+        for i in range(len(r)):
+            mRois[i] = np.zeros((512, 512), dtype=np.int32)
+        contornos = []
+
+        for i in range(len(r)):
+            contornos.append(self.UI_Contornos[r[i]][pos[i]][:, :-1])
+
+        scaled_contornos = [[] for _ in range(len(contornos))]
+        for i, contorno in enumerate(contornos):
+            for x, y in contorno:
+                x = (x - x_imagen)
+                y = (y - y_imagen)
+                scaled_contornos[i].append((x, y))
+
+        for i in range(len(r)):
+            # Dibujar el contorno en la matriz de ceros
+            cv2.drawContours(mRois[i], [np.array(scaled_contornos[i], dtype=np.int32)], 0, 1, -1)
+
+        mascara = np.zeros((512,512), dtype=object)  # crear matriz mascara con ceros
+
+        for k in range(len(mRois)):  # recorrer todas las matrices mRois[i]s
+            for i in range(512):  # recorrer filas
+                for j in range(512):  # recorrer columnas
+                    if (mRois[k][i][j] != 0):
+                        mascara[i][j] = 1
+
+        return mascara
 
 
     def obtener_ROI_RTSTRUCT(self):
