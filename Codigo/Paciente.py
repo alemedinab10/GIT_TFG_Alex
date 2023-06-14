@@ -15,9 +15,12 @@ from scipy.ndimage import label, center_of_mass, sum
 
 class Paciente:
 
-    def __init__(self, paciente, ROI_con_mayor_suvmax):
+    def __init__(self, paciente, ROI_con_mayor_suvmax, dirBaseDatos = None):
+        if (dirBaseDatos is None):
+            self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
+        else:
+            self.direccionBaseDatos = dirBaseDatos
         self.paciente = paciente
-        self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
         self.altura = self.extraerAlturaCT()
         self.peso = self.extraerPesoCT()
         self.BSA = np.sqrt((self.altura*self.peso )/3600)
