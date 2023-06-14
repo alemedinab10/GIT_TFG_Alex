@@ -713,18 +713,17 @@ class Paciente:
 
 
     def calcularParametrosDistancia (self): 
-        Dmax_patient = max(self.euc_dist_ctr)
+        Dmax_patient = max(self.euc_dist_ctr) / 10
         sizes_of_lesions = [sum(self.mascaraGeneral, self.labeled_data, index = i) for i in range(1, self.num_features+1)]
         largest_size = max(sizes_of_lesions)
         largest_index = np.where(sizes_of_lesions == largest_size)[0][0]
-        largest_label = largest_index + 1
-        Dmax_bulk = max(self.lesion_distances(largest_index))
-        Spread_bulk = np.sum(self.lesion_distances(largest_index))
+        Dmax_bulk = max(self.lesion_distances(largest_index)) / 10
+        Spread_bulk = np.sum(self.lesion_distances(largest_index)) / 10
         sums = [np.sum(self.lesion_distances(i)) for i in range(self.num_features)]
-        Spread_patient = max(sums)
+        Spread_patient = max(sums) / 10
         SDmax_euc = Dmax_patient/self.BSA
-        SDmax_man = max(self.man_dist_ctr)/self.BSA
-        SDmax_che = max(self.che_dist_ctr)/self.BSA
+        SDmax_man = max(self.man_dist_ctr)/self.BSA / 10
+        SDmax_che = max(self.che_dist_ctr)/self.BSA / 10
 
         results_dict = {
             'Height': [self.altura],
