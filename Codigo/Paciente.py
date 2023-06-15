@@ -733,6 +733,7 @@ class Paciente:
 
 
     def calcularParametrosDistancia (self): 
+        print ("Calculando distancias ...")
         Dmax_patient = max(self.euc_dist_ctr) / 10
         sizes_of_lesions = [sum(self.mascaraGeneral, self.labeled_data, index = i) for i in range(1, self.num_features+1)]
         largest_size = max(sizes_of_lesions)
