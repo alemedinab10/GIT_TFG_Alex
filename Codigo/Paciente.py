@@ -141,8 +141,8 @@ class Paciente:
         dicom = pydicom.dcmread(os.path.join(self.direccionBaseDatos, str(self.paciente),"CT", f"DICOM_{str(numero_en_archivo_dicom).zfill(3)}.dcm"))
         plano = self.obtener_Coordenadas(dicom)[2]
         for clave_externa in self.UI_Contornos:
-            for i, cont in enumerate(self.UI_Contornos[clave_externa], 0):
-                if (plano == cont[0][2]):
+            for i, cont in enumerate(self.UI_Contornos[clave_externa]):
+                if len(cont) > 0 and plano == cont[0][2]:
                     r.append(clave_externa)
                     pos.append(i)
         return r, pos
@@ -343,7 +343,10 @@ class Paciente:
         contornos = []
 
         for i in range(len(r)):
-            contornos.append(self.UI_Contornos[r[i]][pos[i]][:, :-1])
+            try:
+                contornos.append(self.UI_Contornos[r[i]][pos[i]][:, :-1])
+            except TypeError:
+                continue
 
         scaled_contornos = [[] for _ in range(len(contornos))]
         for i, contorno in enumerate(contornos):
@@ -353,7 +356,8 @@ class Paciente:
                 scaled_contornos[i].append((x, y))
 
         for i in range(len(r)):
-            # Dibujar el contorno en la matriz de ceros
+            if i >= len(mRois) or i >= len(scaled_contornos):
+                continue
             cv2.drawContours(mRois[i], [np.array(scaled_contornos[i], dtype=np.int32)], 0, 1, -1)
 
         mascara = np.zeros((512,512), dtype=object)  # crear matriz mascara con ceros
@@ -363,7 +367,6 @@ class Paciente:
                 for j in range(512):  # recorrer columnas
                     if (mRois[k][i][j] != 0):
                         mascara[i][j] = 1
-
         return mascara
 
 
@@ -402,7 +405,10 @@ class Paciente:
                     # Divide la lista en sub-listas de 3 elementos cada una
                     cont_matrix = [cont_values[i:i+3] for i in range(0, len(cont_values), 3)]
                     # Imprime la lista resultante
-                    cont_matrix = np.array(cont_matrix)
+                    for i in range(len(cont_matrix)):
+                        if not isinstance(cont_matrix[i], np.ndarray):
+                            cont_matrix[i] = np.array(cont_matrix[i])
+                    #cont_matrix = np.array(cont_matrix)
                     UI_Contornos[int(self.extraerROIName(roi))].append(cont_matrix)
                     posicion+=1
         return UI_Contornos
@@ -410,7 +416,7 @@ class Paciente:
 
     def _procesar_RTSTRUCT_como_txt(self):
         # Abrir archivo y leer su contenido
-        with open(os.path.join(self.direccionBaseDatos, str(self.paciente), "RTSTRUCT.txt"), encoding='utf-8') as archivo:
+        with open(os.path.join(self.direccionBaseDatos, str(self.paciente), "RTSTRUCT.txt"), encoding='utf-8', errors='ignore') as archivo:
             texto = archivo.read()
 
         # Eliminar caracteres raros
@@ -455,7 +461,10 @@ class Paciente:
 
                         current_group_text = ""
                         current_roi_position += 1
-                        current_output_file = os.path.join(output_folder, f"{self.nombres_ROI[current_roi_position]}.txt")
+                        try:
+                            current_output_file = os.path.join(output_folder, f"{self.nombres_ROI[current_roi_position]}.txt")
+                        except IndexError:
+                            continue  # Saltar la iteración si se produce un IndexError
                 else:
                     current_group_text += line
         if current_group_text:
@@ -525,7 +534,8 @@ class Paciente:
         self._procesar_RTSTRUCT_como_txt()
 
         for clave_externa in UI_Contornos:
-            with open(os.path.join(self.direccionBaseDatos, str(self.paciente), "ROI_txt", f"fROI_{clave_externa}.txt"), "r") as archivo:
+            with open(os.path.join(self.direccionBaseDatos, str(self.paciente), "ROI_txt", f"fROI_{clave_externa}.txt"), encoding='utf-8', errors='ignore', mode='r') as archivo:
+                
                 lineas = archivo.readlines()
             for i, cont in enumerate(UI_Contornos[clave_externa], 0):
                 if (len(cont) == 1):
