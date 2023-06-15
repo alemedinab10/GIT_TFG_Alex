@@ -116,7 +116,7 @@ class Paciente:
 
     def extraerSpacing(self):
         dir_PET = os.path.join(self.direccionBaseDatos, str(self.paciente), r"PET\\")
-        ds = pydicom.dcmread(os.path.join(dir_PET, os.listdir(dir_PET)[0]))
+        ds = pydicom.dcmread(os.path.join(dir_PET, os.listdir(dir_PET)[0]), force=True)
         # Buscar el patrón deseado usando expresiones regulares
         patron = re.compile(r'\(0028, 0030\) Pixel Spacing\s+DS:\s+(.*)\n')
         patronZ = re.compile(r'\(0018, 0050\) Slice Thickness\s+DS:\s+(.*)\n')
