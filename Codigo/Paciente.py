@@ -142,9 +142,12 @@ class Paciente:
         plano = self.obtener_Coordenadas(dicom)[2]
         for clave_externa in self.UI_Contornos:
             for i, cont in enumerate(self.UI_Contornos[clave_externa]):
-                if len(cont) > 0 and plano == cont[0][2]:
-                    r.append(clave_externa)
-                    pos.append(i)
+                try:
+                    if len(cont) > 0 and plano == cont[0][2]:
+                        r.append(clave_externa)
+                        pos.append(i)
+                except TypeError:
+                    continue
         return r, pos
 
 
@@ -534,9 +537,13 @@ class Paciente:
         self._procesar_RTSTRUCT_como_txt()
 
         for clave_externa in UI_Contornos:
-            with open(os.path.join(self.direccionBaseDatos, str(self.paciente), "ROI_txt", f"fROI_{clave_externa}.txt"), encoding='utf-8', errors='ignore', mode='r') as archivo:
-                
-                lineas = archivo.readlines()
+            try:
+                file_path = os.path.join("G:", "Base_de_Datos", str(self.paciente), "ROI_txt", f"fROI_{clave_externa}.txt")
+                with open(file_path, encoding='utf-8', errors='ignore', mode='r') as archivo:
+                    lineas = archivo.readlines()
+            except FileNotFoundError:
+                continue
+
             for i, cont in enumerate(UI_Contornos[clave_externa], 0):
                 if (len(cont) == 1):
                     try:
