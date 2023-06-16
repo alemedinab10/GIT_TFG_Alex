@@ -16,6 +16,7 @@ from scipy.ndimage import label, center_of_mass, sum
 class Paciente:
 
     def __init__(self, paciente, ROI_con_mayor_suvmax, dirBaseDatos = None):
+        print(f"\nPaciente {paciente}")
         if (dirBaseDatos is None):
             self.direccionBaseDatos = os.path.join(os.path.dirname(os.getcwd()), "PacienteEjemplo")
         else:
